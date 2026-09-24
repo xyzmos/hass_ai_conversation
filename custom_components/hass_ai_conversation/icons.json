@@ -1,0 +1,13 @@
+{
+  "services": {
+    "query_image": {
+      "service": "mdi:image"
+    },
+    "change_config": {
+      "service": "mdi:cog"
+    },
+    "rebuild_device_map": {
+      "service": "mdi:map"
+    }
+  }
+}

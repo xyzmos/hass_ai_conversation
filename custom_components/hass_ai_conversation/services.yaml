@@ -1,0 +1,63 @@
+query_image:
+  fields:
+    config_entry:
+      required: true
+      selector:
+        config_entry:
+          integration: hass_ai_conversation
+    model:
+      example: gpt-5-mini
+      selector:
+        text:
+    prompt:
+      example: "这张图片里有什么？"
+      required: true
+      selector:
+        text:
+          multiline: true
+    images:
+      example: '{"url": "https://example.com/image.jpg"}'
+      required: true
+      default: []
+      selector:
+        object:
+    max_tokens:
+      example: 300
+      default: 300
+      selector:
+        number:
+          min: 1
+          mode: box
+change_config:
+  fields:
+    config_entry:
+      required: true
+      selector:
+        config_entry:
+          integration: hass_ai_conversation
+    api_key:
+      selector:
+        text:
+          type: password
+    base_url:
+      example: https://api.openai.com/v1
+      selector:
+        text:
+    api_version:
+      selector:
+        text:
+    organization:
+      selector:
+        text:
+    skip_authentication:
+      selector:
+        boolean:
+    api_provider:
+      example: openai
+      selector:
+        select:
+          options:
+            - openai
+            - azure
+          mode: dropdown
+rebuild_device_map:

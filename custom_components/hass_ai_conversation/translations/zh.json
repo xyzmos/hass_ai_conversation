@@ -1,0 +1,206 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "name": "名称",
+          "api_key": "API 密钥",
+          "base_url": "基础 URL",
+          "api_version": "API 版本",
+          "organization": "组织",
+          "skip_authentication": "跳过认证",
+          "api_provider": "API 提供商"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接",
+      "invalid_auth": "认证失败",
+      "unknown": "未知错误"
+    }
+  },
+  "config_subentries": {
+    "conversation": {
+      "entry_type": "对话代理",
+      "initiate_flow": {
+        "reconfigure": "重新配置对话代理",
+        "user": "添加对话代理"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "max_tokens": "响应最大令牌数",
+            "model": "模型",
+            "prompt": "提示词模板",
+            "max_function_calls_per_conversation": "每次对话最大函数调用次数",
+            "functions": "自定义函数",
+            "llm_hass_api": "Home Assistant API",
+            "context_threshold": "上下文阈值",
+            "context_truncate_strategy": "超出阈值时的截断策略",
+            "context_rolling_window_size": "滚动窗口保留消息数",
+            "advanced_options": "高级选项"
+          },
+          "data_description": {
+            "llm_hass_api": "选择要暴露给AI的Home Assistant工具API"
+          }
+        },
+        "advanced": {
+          "title": "高级选项",
+          "data": {
+            "temperature": "温度",
+            "top_p": "Top P",
+            "reasoning_effort": "推理力度",
+            "service_tier": "服务层级",
+            "shorten_tool_call_id": "缩短工具调用ID"
+          },
+          "data_description": {
+            "shorten_tool_call_id": "Mistral AI云API兼容性所需。仅在您的提供商需要短（9字符）工具调用ID时启用。OpenAI和大多数其他提供商请保持禁用。"
+          }
+        }
+      }
+    },
+    "ai_task_data": {
+      "entry_type": "AI任务代理",
+      "initiate_flow": {
+        "reconfigure": "重新配置AI任务代理",
+        "user": "添加AI任务代理"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "name": "名称",
+            "chat_model": "模型",
+            "max_tokens": "响应最大令牌数",
+            "advanced_options": "高级选项"
+          }
+        },
+        "advanced": {
+          "title": "高级选项",
+          "data": {
+            "temperature": "温度",
+            "top_p": "Top P",
+            "reasoning_effort": "推理力度",
+            "service_tier": "服务层级",
+            "shorten_tool_call_id": "缩短工具调用ID"
+          },
+          "data_description": {
+            "shorten_tool_call_id": "Mistral AI云API兼容性所需。仅在您的提供商需要短（9字符）工具调用ID时启用。OpenAI和大多数其他提供商请保持禁用。"
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "query_image": {
+      "name": "图像查询",
+      "description": "接收图像并回答相关问题",
+      "fields": {
+        "config_entry": {
+          "name": "配置条目",
+          "description": "用于此服务的配置条目"
+        },
+        "model": {
+          "name": "模型",
+          "description": "使用的模型",
+          "example": "gpt-5-mini"
+        },
+        "prompt": {
+          "name": "提示词",
+          "description": "关于图像的问题",
+          "example": "这张图片里有什么？"
+        },
+        "images": {
+          "name": "图像",
+          "description": "要查询的图像列表"
+        },
+        "max_tokens": {
+          "name": "最大令牌数",
+          "description": "最大令牌数",
+          "example": "300"
+        }
+      }
+    },
+    "change_config": {
+      "name": "更改配置",
+      "description": "更改集成的配置。",
+      "fields": {
+        "config_entry": {
+          "name": "配置条目",
+          "description": "要更新的配置条目。"
+        },
+        "api_key": {
+          "name": "API密钥",
+          "description": "API密钥。"
+        },
+        "base_url": {
+          "name": "基础URL",
+          "description": "基础URL。"
+        },
+        "api_version": {
+          "name": "API版本",
+          "description": "API版本。"
+        },
+        "organization": {
+          "name": "组织",
+          "description": "组织。"
+        },
+        "skip_authentication": {
+          "name": "跳过认证",
+          "description": "跳过认证。"
+        },
+        "api_provider": {
+          "name": "API提供商",
+          "description": "API提供商。（OpenAI或Azure）"
+        }
+      }
+    },
+    "rebuild_device_map": {
+      "name": "重建设备映射",
+      "description": "重建设备别名映射表，刷新设备名称到实体ID的映射关系。"
+    }
+  },
+  "exceptions": {
+    "entity_not_found": {
+      "message": "找不到实体 {entity_id}"
+    },
+    "entity_not_exposed": {
+      "message": "实体 {entity_id} 未暴露给助手"
+    },
+    "call_service_error": {
+      "message": "无法调用服务 {domain}.{service}，需要提供 entity_id、area_id 或 device_id 之一"
+    },
+    "function_not_found": {
+      "message": "函数 `{function}` 不存在"
+    },
+    "native_not_found": {
+      "message": "原生函数 `{name}` 不存在"
+    },
+    "function_load_failed": {
+      "message": "函数加载失败，请检查YAML格式是否正确"
+    },
+    "parse_arguments_failed": {
+      "message": "解析参数失败 `{arguments}`，请增加最大令牌数以避免此问题"
+    },
+    "token_length_exceeded": {
+      "message": "令牌长度(`{token}`)超限，请增加最大令牌数以避免此问题"
+    },
+    "content_filter": {
+      "message": "响应被内容过滤器拦截，请调整输入内容或稍后重试"
+    },
+    "invalid_function": {
+      "message": "函数验证失败 `{function_name}`"
+    },
+    "invalid_chat_log_content": {
+      "message": "对话日志最后的内容不是AssistantContent"
+    },
+    "blocked_service": {
+      "message": "服务 {domain}.{service} 受保护，禁止由助手调用"
+    },
+    "select_only": {
+      "message": "只允许执行 SELECT 查询"
+    },
+    "admin_only_change_config": {
+      "message": "只有管理员用户才能修改 AI Conversation 配置"
+    }
+  }
+}

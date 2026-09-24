@@ -1,0 +1,205 @@
+{
+  "config": {
+    "error": {
+      "cannot_connect": "Não é possível conectar",
+      "invalid_auth": "Autenticação inválida",
+      "unknown": "Erro desconhecido"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "name": "Nome",
+          "api_key": "Chave API",
+          "base_url": "Base Url",
+          "api_version": "Versão da API",
+          "organization": "Organização",
+          "skip_authentication": "Pular autenticação",
+          "api_provider": "Api Provider"
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "conversation": {
+      "entry_type": "Conversation agent",
+      "initiate_flow": {
+        "reconfigure": "Reconfigure conversation agent",
+        "user": "Add conversation agent"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "max_tokens": "Número máximo de tokens da resposta",
+            "model": "Modelo da Conclusão",
+            "prompt": "Template do Prompt",
+            "max_function_calls_per_conversation": "Quantidade máxima de chamadas por conversação",
+            "llm_hass_api": "Home Assistant API",
+            "functions": "Funções",
+            "context_threshold": "Limite do contexto",
+            "context_truncate_strategy": "Estratégia de truncamento de contexto quando o limite é excedido",
+            "advanced_options": "Advanced Options"
+          },
+          "data_description": {
+            "llm_hass_api": "Selecione as APIs de ferramentas do Home Assistant a expor à IA"
+          }
+        },
+        "advanced": {
+          "title": "Advanced Options",
+          "data": {
+            "temperature": "Temperatura",
+            "top_p": "Top P",
+            "reasoning_effort": "Reasoning effort",
+            "service_tier": "Service tier",
+            "shorten_tool_call_id": "Shorten tool call IDs"
+          },
+          "data_description": {
+            "shorten_tool_call_id": "Required for Mistral AI cloud API compatibility. Enable only if your provider requires short (9-character) tool call IDs. Keep disabled for OpenAI and most other providers."
+          }
+        }
+      }
+    },
+    "ai_task_data": {
+      "entry_type": "AI Task agent",
+      "initiate_flow": {
+        "reconfigure": "Reconfigure AI Task agent",
+        "user": "Add AI Task agent"
+      },
+      "step": {
+        "init": {
+          "data": {
+            "name": "Name",
+            "chat_model": "Model",
+            "max_tokens": "Maximum tokens to return in response",
+            "advanced_options": "Advanced options"
+          }
+        },
+        "advanced": {
+          "title": "Advanced options",
+          "data": {
+            "temperature": "Temperature",
+            "top_p": "Top P",
+            "reasoning_effort": "Reasoning effort",
+            "service_tier": "Service tier",
+            "shorten_tool_call_id": "Shorten tool call IDs"
+          },
+          "data_description": {
+            "shorten_tool_call_id": "Required for Mistral AI cloud API compatibility. Enable only if your provider requires short (9-character) tool call IDs. Keep disabled for OpenAI and most other providers."
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "query_image": {
+      "name": "Consultar imagem",
+      "description": "Receba imagens e responda perguntas sobre elas",
+      "fields": {
+        "config_entry": {
+          "name": "Registro de configuração",
+          "description": "O registro de configuração para utilizar neste serviço"
+        },
+        "model": {
+          "name": "Modelo",
+          "description": "Especificar modelo",
+          "example": "gpt-4.1-mini"
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "O texto para fazer a pergunta sobre a imagem",
+          "example": "O que tem nesta imagem?"
+        },
+        "images": {
+          "name": "Imagens",
+          "description": "Uma lista de imagens que serão analisadas"
+        },
+        "max_tokens": {
+          "name": "Max Tokens",
+          "description": "Quantidade máxima de tokens",
+          "example": "300"
+        }
+      }
+    },
+    "change_config": {
+      "name": "Change configuration",
+      "description": "Changes the configuration of the integration.",
+      "fields": {
+        "config_entry": {
+          "name": "Config Entry",
+          "description": "The config entry to update."
+        },
+        "api_key": {
+          "name": "Chave API",
+          "description": "The API key."
+        },
+        "base_url": {
+          "name": "Base Url",
+          "description": "The base URL."
+        },
+        "api_version": {
+          "name": "Versão da API",
+          "description": "The API version."
+        },
+        "organization": {
+          "name": "Organização",
+          "description": "The organization."
+        },
+        "skip_authentication": {
+          "name": "Pular autenticação",
+          "description": "Skip authentication."
+        },
+        "api_provider": {
+          "name": "Api Provider",
+          "description": "The API provider. (OpenAI or Azure)"
+        }
+      }
+    },
+    "rebuild_device_map": {
+      "name": "Reconstruir mapa de dispositivos",
+      "description": "Reconstruir a tabela de mapeamento de aliases de dispositivos, atualizando o mapeamento de nomes de dispositivos para IDs de entidades."
+    }
+  },
+  "exceptions": {
+    "entity_not_found": {
+      "message": "Entity {entity_id} not found"
+    },
+    "entity_not_exposed": {
+      "message": "Entity {entity_id} is not exposed to the assistant"
+    },
+    "call_service_error": {
+      "message": "Unable to call service {domain}.{service}; one of entity_id, area_id or device_id must be provided"
+    },
+    "function_not_found": {
+      "message": "Function `{function}` does not exist"
+    },
+    "native_not_found": {
+      "message": "Native function `{name}` does not exist"
+    },
+    "function_load_failed": {
+      "message": "Function load failed, please check the YAML format"
+    },
+    "parse_arguments_failed": {
+      "message": "Failed to parse arguments `{arguments}`; increase max tokens to avoid this"
+    },
+    "token_length_exceeded": {
+      "message": "Token length (`{token}`) exceeded; increase max tokens to avoid this"
+    },
+    "content_filter": {
+      "message": "Response blocked by content filter; adjust input or try again later"
+    },
+    "invalid_function": {
+      "message": "Function validation failed: `{function_name}`"
+    },
+    "invalid_chat_log_content": {
+      "message": "Last chat log content is not an AssistantContent"
+    },
+    "blocked_service": {
+      "message": "Service {domain}.{service} is protected and cannot be called by the assistant"
+    },
+    "select_only": {
+      "message": "Only SELECT queries are allowed"
+    },
+    "admin_only_change_config": {
+      "message": "Only admin users can change the AI Conversation configuration"
+    }
+  }
+}
