@@ -20,7 +20,7 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/xyzmos/hass_ai_conversation/issues",
   "requirements": [
-    "openai>=2.21.0,<3.0.0",
+    "openai>=2.21.0",
     "voluptuous-openapi>=0.4.1"
   ],
   "version": "3.2.0"

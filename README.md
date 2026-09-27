@@ -167,7 +167,7 @@ fix(i18n): 修正异常文案中的单引号占位符
 
 本 fork 相对原项目的主要变更：
 
-- **依赖修复**：放宽 openai 约束为 `>=2.21.0,<3.0.0`，解决与 HA 核心锁定 `openai==2.45.0` 的依赖解析冲突
+- **依赖修复**：openai 约束只保留最低版本 `>=2.21.0`，不再限制最高版本，避免与 HA 核心锁定的 openai 版本（如 `2.45.0`、`3.10.0`）产生依赖解析冲突
 - **改名**：domain 由 `extended_openai_conversation` 改为 `hass_ai_conversation`
 - **规范合规**：`AuthenticationError` 改用 `ConfigEntryAuthFailed` 触发 reauth；异常类文案接入 i18n translation 体系；`iot_class` 修正为 `cloud_push`；日志改为英文
 - **HACS 规范化**：仓库改为 `custom_components/<domain>/` 标准布局，补充 `hacs.json`、品牌图标、CI 校验与发布流程

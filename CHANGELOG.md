@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **openai 上限约束冲突**: `requirements` 由 `openai>=2.21.0,<3.0.0` 改为 `openai>=2.21.0`。此前一旦 Home Assistant 核心锁定 openai 3.x（例如 `openai==3.10.0`），pip 解析会报 `Because you require openai>=2.21.0,<3.0.0 and openai==3.10.0 ... your requirements are unsatisfiable`。现在只限制最低版本，由 HA 核心决定实际安装版本。
+
 ## [3.2.0] - 2026-09-24
 
 ### Changed
