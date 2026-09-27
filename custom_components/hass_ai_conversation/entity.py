@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 from collections.abc import AsyncGenerator
+from dataclasses import fields
 import hashlib
 import json
 import logging
@@ -68,6 +69,39 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 MAX_TOOL_ITERATIONS = 20
+
+# HA 2026.10 起 ToolResultContent 的 tool_result 字段改为 result: llm.ToolResult，
+# tool_result 降级为只读兼容属性，不能再作为构造参数传入。
+_TOOL_RESULT_USES_LLM_TOOL_RESULT = "result" in {
+    content_field.name for content_field in fields(conversation.ToolResultContent)
+}
+
+
+def _tool_result_content(
+    agent_id: str,
+    tool_input: llm.ToolInput,
+    result: dict[str, Any] | llm.ToolResult,
+    error: bool = False,
+) -> conversation.ToolResultContent:
+    """Build tool result content for both the legacy and the new HA API."""
+    if not _TOOL_RESULT_USES_LLM_TOOL_RESULT:
+        return conversation.ToolResultContent(
+            agent_id=agent_id,
+            tool_call_id=tool_input.id,
+            tool_name=tool_input.tool_name,
+            tool_result=result,
+        )
+
+    return conversation.ToolResultContent(
+        agent_id=agent_id,
+        tool_call_id=tool_input.id,
+        tool_name=tool_input.tool_name,
+        result=(
+            result
+            if isinstance(result, llm.ToolResult)
+            else llm.ToolResult(data=result, error=error)
+        ),
+    )
 
 
 def _shorten_tool_call_id(tool_call_id: str) -> str:
@@ -205,7 +239,11 @@ def _convert_content_to_param(
                     "tool_call_id": _shorten_tool_call_id(content.tool_call_id)
                     if shorten_tool_call_id
                     else content.tool_call_id,
-                    "content": orjson.dumps(content.tool_result).decode(),
+                    "content": orjson.dumps(
+                        content.result.data
+                        if _TOOL_RESULT_USES_LLM_TOOL_RESULT
+                        else content.tool_result
+                    ).decode(),
                 }
             )
 
@@ -415,19 +453,14 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
                 if tool.name == tool_input.tool_name:
                     try:
                         result = await chat_log.llm_api.async_call_tool(tool_input)
-                        return conversation.ToolResultContent(
-                            agent_id=self.entity_id,
-                            tool_call_id=tool_input.id,
-                            tool_name=tool_input.tool_name,
-                            tool_result=result,
-                        )
+                        return _tool_result_content(self.entity_id, tool_input, result)
                     except HomeAssistantError as err:
                         _LOGGER.error("LLM tool execution error: %s", err)
-                        return conversation.ToolResultContent(
-                            agent_id=self.entity_id,
-                            tool_call_id=tool_input.id,
-                            tool_name=tool_input.tool_name,
-                            tool_result={"error": str(err)},
+                        return _tool_result_content(
+                            self.entity_id,
+                            tool_input,
+                            {"error": str(err)},
+                            error=True,
                         )
 
         function_tool = next(
@@ -484,12 +517,7 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
                 self.hass, function_config, arguments, llm_context, exposed_entities
             )
 
-        return conversation.ToolResultContent(
-            agent_id=self.entity_id,
-            tool_call_id=tool_input.id,
-            tool_name=tool_input.tool_name,
-            tool_result={"result": str(result)},
-        )
+        return _tool_result_content(self.entity_id, tool_input, {"result": str(result)})
 
     def should_run_in_background(self, arguments: dict[str, Any]) -> bool:
         """Check if function needs delay."""

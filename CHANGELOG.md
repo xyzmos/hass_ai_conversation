@@ -5,6 +5,7 @@
 ### Fixed
 
 - **openai 上限约束冲突**: `requirements` 由 `openai>=2.21.0,<3.0.0` 改为 `openai>=2.21.0`。此前一旦 Home Assistant 核心锁定 openai 3.x（例如 `openai==3.10.0`），pip 解析会报 `Because you require openai>=2.21.0,<3.0.0 and openai==3.10.0 ... your requirements are unsatisfiable`。现在只限制最低版本，由 HA 核心决定实际安装版本。
+- **HA 2026.10 工具调用崩溃**: HA 2026.10 起 `ToolResultContent.tool_result` 改为 `result: llm.ToolResult`，旧字段降级为只读兼容属性，继续传 `tool_result=` 会抛 `TypeError: ToolResultContent.__init__() got an unexpected keyword argument 'tool_result'`，导致 Assist 意图识别失败。新增 `_tool_result_content()` 依据 `ToolResultContent` 的字段名选择构造方式：2026.10 及以上传 `result=llm.ToolResult(...)`（工具报错时带 `error=True`），更早版本仍传 `tool_result=`；同时读取工具结果时改用 `content.result.data`，避免触发 `tool_result` 属性的弃用上报。
 
 ## [3.2.0] - 2026-09-24
 
