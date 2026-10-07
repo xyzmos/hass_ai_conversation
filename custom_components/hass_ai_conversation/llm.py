@@ -44,7 +44,9 @@ def _has_ma_player(hass: HomeAssistant) -> bool:
         return False
     entity_reg = er.async_get(hass)
     return any(
-        e.platform == MUSIC_ASSISTANT_DOMAIN and e.domain == MEDIA_PLAYER_DOMAIN
+        e.platform == MUSIC_ASSISTANT_DOMAIN
+        and e.domain == MEDIA_PLAYER_DOMAIN
+        and e.original_device_class == "speaker"
         for e in entity_reg.entities.values()
     )
 

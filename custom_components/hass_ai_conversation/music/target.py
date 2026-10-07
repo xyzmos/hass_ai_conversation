@@ -15,8 +15,12 @@ it retried with mangled names ('音箱 音箱' -> '音箱') in a blind loop.
 Here we:
 
 * only ever match among ``platform == 'music_assistant'`` media_player entities
-  (no FEATURE mismatch is possible, and a name that only exists on a non-MA
-  speaker produces a helpful diagnostic instead of a cryptic feature error);
+  whose ``original_device_class == 'speaker'`` — mirroring the upstream
+  ``entity_device_classes=[SPEAKER]`` gate on play_media / play_announcement /
+  transfer_queue / get_queue, so MA dashboard display entities can never be
+  selected (they would raise ``ServiceNotSupported`` at the service layer);
+* a name that only exists on a non-MA speaker produces a helpful diagnostic
+  instead of a cryptic feature error;
 * normalise duplicated names the model produces ('音箱 音箱' -> '音箱',
   '音箱音箱' -> '音箱');
 * fall back to area/floor-only matching, then to a single-available-player
@@ -87,13 +91,29 @@ def _player_meta(hass: HomeAssistant, state: State) -> dict[str, Any]:
     return meta
 
 
+def _is_speaker(entry: er.RegistryEntry) -> bool:
+    """Mirror the upstream ``entity_device_classes=[SPEAKER]`` gate.
+
+    The Music Assistant entity services (play_media, play_announcement,
+    transfer_queue, get_queue) only accept ``MediaPlayerDeviceClass.SPEAKER``
+    entities. A dashboard display entity is also a
+    ``platform == 'music_assistant'`` media_player but has no device class, so
+    the service raises ``ServiceNotSupported`` ('does not support action …')
+    when addressed. ``original_device_class`` is a StrEnum / str / None.
+    """
+    dc = entry.original_device_class
+    return dc == "speaker" or getattr(dc, "value", None) == "speaker"
+
+
 def _ma_players(hass: HomeAssistant) -> tuple[list[State], er.EntityRegistry]:
-    """Return (available MA player states, entity registry)."""
+    """Return (playable MA speaker states, entity registry)."""
     entity_reg = er.async_get(hass)
     ma_ids = {
         e.entity_id
         for e in entity_reg.entities.values()
-        if e.platform == MUSIC_ASSISTANT_DOMAIN and e.domain == MEDIA_PLAYER_DOMAIN
+        if e.platform == MUSIC_ASSISTANT_DOMAIN
+        and e.domain == MEDIA_PLAYER_DOMAIN
+        and _is_speaker(e)
     }
     states = [
         s
@@ -191,7 +211,7 @@ def resolve_player(
         return None, {
             "error": _ERROR_NO_MA,
             "error_text": (
-                "No Music Assistant media_player entities are available. "
+                "No playable Music Assistant speaker entities are available. "
                 "Ensure the Music Assistant integration is configured and its "
                 "players are exposed to the assistant."
             ),
