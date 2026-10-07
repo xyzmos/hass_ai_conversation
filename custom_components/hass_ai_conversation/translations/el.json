@@ -70,7 +70,8 @@
             "name": "Name",
             "chat_model": "Model",
             "max_tokens": "Maximum tokens to return in response",
-            "advanced_options": "Advanced options"
+            "advanced_options": "Advanced options",
+            "image_model": "Μοντέλο εικόνας"
           }
         },
         "advanced": {
@@ -200,6 +201,9 @@
     },
     "admin_only_change_config": {
       "message": "Only admin users can change the AI Conversation configuration"
+    },
+    "image_generation_error": {
+      "message": "Σφάλμα δημιουργίας εικόνας"
     }
   }
 }

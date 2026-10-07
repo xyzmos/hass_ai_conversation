@@ -71,7 +71,8 @@
             "name": "名称",
             "chat_model": "模型",
             "max_tokens": "响应最大令牌数",
-            "advanced_options": "高级选项"
+            "advanced_options": "高级选项",
+            "image_model": "图片模型（用于 AI Task 图片生成）"
           }
         },
         "advanced": {
@@ -201,6 +202,9 @@
     },
     "admin_only_change_config": {
       "message": "只有管理员用户才能修改 AI Conversation 配置"
+    },
+    "image_generation_error": {
+      "message": "图片生成失败"
     }
   }
 }

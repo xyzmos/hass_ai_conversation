@@ -67,7 +67,6 @@ class ExtendedOpenAIAgentEntity(
     """Extended OpenAI conversation agent."""
 
     _attr_supports_streaming = True
-    _attr_supported_features = ConversationEntityFeature.CONTROL
 
     def __init__(
         self, entry: ExtendedOpenAIConfigEntry, subentry: ConfigSubentry
@@ -76,6 +75,10 @@ class ExtendedOpenAIAgentEntity(
         super().__init__(entry, subentry)
         self._cached_function_tools: list[dict[str, Any]] | None = None
         self._cached_function_tools_config: str | None = None
+        # 与 HA 核心一致：仅在配置了 llm_hass_api（Assist API）时
+        # 声明 CONTROL 能力；自定义 function tools 仍照常可用。
+        if self.subentry.data.get(CONF_LLM_HASS_API):
+            self._attr_supported_features = ConversationEntityFeature.CONTROL
 
     @property
     def supported_languages(self) -> list[str] | Literal["*"]:

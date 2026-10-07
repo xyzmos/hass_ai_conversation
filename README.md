@@ -16,8 +16,11 @@
 - **设备别名映射**：`rebuild_device_map` 服务重建「设备名称 → 实体 ID」映射，降低 LLM 误调用
 - **上下文管理**：`context_threshold` 配合截断策略（含滚动窗口）控制 token 用量
 - **多端点**：OpenAI 官方、Azure OpenAI，以及任意 OpenAI 兼容 `base_url`
-- **AI Task 平台**：为 Home Assistant 的 `ai_task` 提供结构化输出能力
-- **完整本地化**：`strings.json` + `translations/`，含简体中文（`translations/zh.json`）
+- **AI Task 平台**：为 Home Assistant 的 `ai_task` 提供结构化输出能力（`generate_data`），并支持 `generate_image`（配置 `image_model` 后启用，走 `images.generate`，兼容 dall-e-3 / gpt-image-1 及 OpenAI 兼容端点）
+- **附件理解**：`ai_task` 用户消息携带的图片/PDF 附件（如相机快照）自动转换为多模态消息发给视觉模型
+- **思考流**：兼容端点的 `reasoning_content`/`reasoning`（DeepSeek、Qwen、Kimi 等）流式映射为 `thinking_content`，可在 HA 前端查看推理过程
+- **schema 双栈兼容**：HA ≥ 2026.9 使用 `probatio.to_openapi`，旧版本自动回退 `voluptuous-openapi`
+- **完整本地化**：`strings.json` + `translations/`，含简体中文（`translations/zh-Hans.json`）
 
 ## 安装
 

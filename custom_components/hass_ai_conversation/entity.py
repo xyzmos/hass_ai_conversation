@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import copy
 from collections.abc import AsyncGenerator
 from dataclasses import fields
 import hashlib
 import json
 import logging
+from mimetypes import guess_file_type
 from typing import TYPE_CHECKING, Any, Callable
 
 from openai import AsyncClient, AsyncStream
@@ -19,11 +21,21 @@ from openai.types.chat import (
     ChatCompletionToolParam,
 )
 import orjson
-import voluptuous as vol
-from voluptuous_openapi import UNSUPPORTED, convert
+
+try:
+    # HA 2026.9 起核心以 probatio 取代 voluptuous + voluptuous-openapi；
+    # probatio.to_openapi 可直接序列化 probatio.Schema / vol.Schema（shim）。
+    import probatio
+
+    _to_openapi = probatio.to_openapi
+    _UNSUPPORTED = probatio.UNSUPPORTED
+except ImportError:  # HA < 2026.9
+    from voluptuous_openapi import UNSUPPORTED as _UNSUPPORTED
+    from voluptuous_openapi import convert as _to_openapi  # type: ignore[no-redef]
 
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, llm
 from homeassistant.helpers.entity import Entity
@@ -141,15 +153,41 @@ def _adjust_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return schema
 
 
+def _strip_unsupported_keywords(schema: dict[str, Any]) -> dict[str, Any]:
+    """Remove JSON schema keywords some LLM endpoints reject.
+
+    Same keyword set as homeassistant.components.openai_conversation
+    (oneOf/anyOf/allOf/enum/not), but stripped recursively instead of
+    top-level only, since Chat Completions endpoints are stricter than
+    the Responses API.
+    """
+    unsupported = {"oneOf", "anyOf", "allOf", "enum", "not"}
+    if not isinstance(schema, dict):
+        return schema
+    result = {
+        key: value for key, value in schema.items() if key not in unsupported
+    }
+    for key, value in result.items():
+        if isinstance(value, dict):
+            result[key] = _strip_unsupported_keywords(value)
+        elif isinstance(value, list):
+            result[key] = [
+                _strip_unsupported_keywords(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+    return result
+
+
 def _normalize_custom_serializer(
     custom_serializer: Callable[..., Any] | None,
 ) -> Callable[..., Any] | None:
     """Wrap an external custom serializer to translate foreign markers.
 
-    voluptuous-openapi recognises only its own UNSUPPORTED sentinel, while
-    Home Assistant's llm.selector_serializer returns its own _Unsupported
-    marker. Without this adapter, such markers would leak into the generated
-    JSON schema and break serialization to the LLM API.
+    Both voluptuous-openapi (HA < 2026.9) and probatio (HA >= 2026.9)
+    recognise only their own UNSUPPORTED sentinel, while Home Assistant's
+    llm.selector_serializer may return another marker. Without this adapter
+    such markers would leak into the generated JSON schema and break
+    serialization to the LLM API.
     """
 
     if custom_serializer is None:
@@ -159,21 +197,38 @@ def _normalize_custom_serializer(
         result = custom_serializer(schema)
         if isinstance(result, dict):
             return result
-        return UNSUPPORTED
+        return _UNSUPPORTED
 
     return wrapped
 
 
+def _schema_to_openapi(
+    schema: Any, custom_serializer: Callable[..., Any] | None
+) -> dict[str, Any]:
+    """Serialize a voluptuous/probatio schema to an OpenAPI dict.
+
+    probatio.to_openapi accepts ``openapi_version`` since 0.13; the legacy
+    voluptuous-openapi ``convert`` does not. Both accept ``custom_serializer``
+    returning either a dict or the UNSUPPORTED sentinel.
+    """
+    try:
+        return _to_openapi(
+            schema,
+            custom_serializer=custom_serializer,
+            openapi_version="3.1.0",
+        )
+    except TypeError:
+        return _to_openapi(schema, custom_serializer=custom_serializer)
+
+
 def _format_structured_output(
-    schema: vol.Schema, llm_api: llm.APIInstance | None
+    schema: Any, llm_api: llm.APIInstance | None
 ) -> dict[str, Any]:
     """Format the schema to be compatible with OpenAI API."""
-    result: dict[str, Any] = convert(
+    result: dict[str, Any] = _schema_to_openapi(
         schema,
-        custom_serializer=(
-            _normalize_custom_serializer(llm_api.custom_serializer)
-            if llm_api
-            else _normalize_custom_serializer(llm.selector_serializer)
+        _normalize_custom_serializer(
+            llm_api.custom_serializer if llm_api else llm.selector_serializer
         ),
     )
 
@@ -186,17 +241,94 @@ def _format_llm_tool(
     tool: llm.Tool, custom_serializer: Any | None
 ) -> ChatCompletionToolParam:
     """Format an LLM tool to OpenAI function tool format."""
+    parameters = _schema_to_openapi(
+        tool.parameters, _normalize_custom_serializer(custom_serializer)
+    )
+    parameters = _strip_unsupported_keywords(parameters)
     return ChatCompletionToolParam(
         type="function",
         function={
             "name": tool.name,
             "description": tool.description or "",
-            "parameters": convert(
-                tool.parameters,
-                custom_serializer=_normalize_custom_serializer(custom_serializer),
-            ),
+            "parameters": parameters,
         },
     )
+
+
+def _read_attachment_file(
+    attachment: conversation.Attachment,
+) -> dict[str, Any]:
+    """Read an attachment from disk and convert to an OpenAI content part.
+
+    Only images and PDFs are forwarded to the LLM (same as HA core).
+    Runs in the executor; raises HomeAssistantError on failure.
+    """
+    path = attachment.path
+    mime_type = attachment.mime_type or guess_file_type(path)[0]
+    if not path.exists():
+        raise HomeAssistantError(f"`{path}` does not exist")
+    if not mime_type or not mime_type.startswith(("image/", "application/pdf")):
+        raise HomeAssistantError(
+            "Only images and PDF attachments are supported,"
+            f" `{path}` ({mime_type})"
+        )
+
+    encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+    if mime_type.startswith("image/"):
+        return {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{mime_type};base64,{encoded}",
+                "detail": "auto",
+            },
+        }
+    return {
+        "type": "file",
+        "file": {
+            "filename": path.name,
+            "file_data": f"data:{mime_type};base64,{encoded}",
+        },
+    }
+
+
+async def _async_apply_attachments(
+    hass: HomeAssistant,
+    messages: list[ChatCompletionMessageParam],
+    chat_content: list[conversation.Content],
+) -> None:
+    """Attach files to the last user message in place.
+
+    Mirrors HA core: only when the current input (the last chat-log
+    content) is a user message carrying attachments are the files read
+    in the executor and the corresponding OpenAI message rewritten as
+    a multi-part content list. Attachments on earlier turns were
+    already consumed then and must not be re-sent.
+    """
+    if not chat_content:
+        return
+    last_content = chat_content[-1]
+    attachments = getattr(last_content, "attachments", None)
+    if last_content.role != "user" or not attachments:
+        return
+
+    parts: list[dict[str, Any]] = await hass.async_add_executor_job(
+        lambda: [
+            _read_attachment_file(attachment) for attachment in attachments
+        ]
+    )
+
+    # Every converted role emits exactly one message, so the last
+    # counted content maps to messages[-1].
+    message = messages[-1]
+    if message.get("role") != "user":
+        return
+    text = message.get("content")
+    if not isinstance(text, str):
+        return
+    message["content"] = [
+        {"type": "text", "text": text},
+        *parts,
+    ]
 
 
 def _convert_content_to_param(
@@ -283,7 +415,7 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
         exposed_entities: list[dict[str, Any]],
         llm_context: llm.LLMContext | None = None,
         structure_name: str | None = None,
-        structure: vol.Schema | None = None,
+        structure: Any = None,
     ) -> None:
         """Generate an answer for the chat log with streaming support."""
         options = self.subentry.data
@@ -298,8 +430,6 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
         )
 
         model_config = get_model_config(model)
-
-        messages = _convert_content_to_param(chat_log.content, shorten_tool_call_id)
 
         tools: list[ChatCompletionToolParam] = []
 
@@ -366,6 +496,9 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
         # so we only append the newly produced ones each iteration instead of
         # re-serializing the whole chat log every turn (O(n^2) otherwise).
         messages = _convert_content_to_param(chat_log.content, shorten_tool_call_id)
+        # 用户消息可携带图片/PDF 附件（ai_task 附件），在 executor 中读取
+        # 文件并改写为多段 content，避免阻塞事件循环。
+        await _async_apply_attachments(self.hass, messages, chat_log.content)
         converted_len = len(messages)
 
         for n_requests in range(MAX_TOOL_ITERATIONS):
@@ -456,10 +589,15 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
                         return _tool_result_content(self.entity_id, tool_input, result)
                     except HomeAssistantError as err:
                         _LOGGER.error("LLM tool execution error: %s", err)
+                        # 与 HA 核心默认代理一致：错误时返回
+                        # {"error": 类型, "error_text": 详情}，模型可解释。
                         return _tool_result_content(
                             self.entity_id,
                             tool_input,
-                            {"error": str(err)},
+                            {
+                                "error": type(err).__name__,
+                                "error_text": str(err),
+                            },
                             error=True,
                         )
 
@@ -574,6 +712,17 @@ class ExtendedOpenAIBaseLLMEntity(Entity):
 
             choice = chunk.choices[0]
             delta = choice.delta
+
+            # DeepSeek/Qwen/Kimi 等 OpenAI 兼容端点在流式 delta 中输出
+            # reasoning_content（或 reasoning），对应 HA 的 thinking_content，
+            # 会进入 trace 与前端思考流显示。标准 openai 类型未声明该字段，
+            # 故用 getattr 兜底。
+            thinking = (
+                getattr(delta, "reasoning_content", None)
+                or getattr(delta, "reasoning", None)
+            )
+            if isinstance(thinking, str) and thinking:
+                yield {"thinking_content": thinking}
 
             if delta.content:
                 content_value = delta.content

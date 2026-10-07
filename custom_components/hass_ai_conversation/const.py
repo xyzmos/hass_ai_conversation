@@ -59,6 +59,8 @@ entity_id,名称,当前状态,区域,别名
 
 CONF_CHAT_MODEL = "chat_model"
 DEFAULT_CHAT_MODEL = "gpt-5-mini"
+CONF_IMAGE_MODEL = "image_model"
+DEFAULT_IMAGE_MODEL = "dall-e-3"
 
 MODEL_TOKEN_PARAMETER_SUPPORT = (
     {

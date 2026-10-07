@@ -46,6 +46,7 @@ from .const import (
     CONF_CONTEXT_THRESHOLD,
     CONF_CONTEXT_TRUNCATE_STRATEGY,
     CONF_FUNCTION_TOOLS,
+    CONF_IMAGE_MODEL,
     CONF_MAX_FUNCTION_CALLS_PER_CONVERSATION,
     CONF_MAX_TOKENS,
     CONF_ORGANIZATION,
@@ -518,6 +519,9 @@ class ExtendedOpenAIAITaskSubentryFlowHandler(ConfigSubentryFlow):
                 vol.Optional(
                     CONF_CHAT_MODEL,
                     default=DEFAULT_CHAT_MODEL,
+                ): str,
+                vol.Optional(
+                    CONF_IMAGE_MODEL,
                 ): str,
                 vol.Optional(
                     CONF_MAX_TOKENS,
