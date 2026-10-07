@@ -1,6 +1,9 @@
 {
   "domain": "hass_ai_conversation",
   "name": "AI Conversation",
+  "after_dependencies": [
+    "music_assistant"
+  ],
   "codeowners": [
     "@jekalmin",
     "@xyzmos"
@@ -14,9 +17,6 @@
     "recorder",
     "rest",
     "scrape"
-  ],
-  "after_dependencies": [
-    "music_assistant"
   ],
   "documentation": "https://github.com/xyzmos/hass_ai_conversation",
   "integration_type": "service",
