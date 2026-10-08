@@ -46,6 +46,18 @@ _ERROR_NO_PLAYER = "no_player"
 _ERROR_AMBIGUOUS = "ambiguous"
 _ERROR_NOT_MA = "not_music_assistant"
 _ERROR_NO_MA = "no_music_assistant_players"
+_ERROR_NOT_EXPOSED = "player_not_exposed"
+
+
+def _should_expose(hass: HomeAssistant, assistant: str, entity_id: str) -> bool:
+    """Proxy ``async_should_expose`` without pinning its import location."""
+    try:
+        from homeassistant.components.homeassistant.exposed_entities import (
+            async_should_expose,
+        )
+    except ImportError:  # pragma: no cover - extremely old cores
+        return True
+    return async_should_expose(hass, assistant, entity_id)
 
 
 def _normalize(name: str | None) -> str | None:
@@ -74,7 +86,9 @@ def _normalize(name: str | None) -> str | None:
     return name or None
 
 
-def _player_meta(hass: HomeAssistant, state: State) -> dict[str, Any]:
+def _player_meta(
+    hass: HomeAssistant, state: State, assistant: str | None = None
+) -> dict[str, Any]:
     """Compact description of one player for error payloads / results."""
     entity_reg = er.async_get(hass)
     entry = entity_reg.async_get(state.entity_id)
@@ -88,6 +102,8 @@ def _player_meta(hass: HomeAssistant, state: State) -> dict[str, Any]:
     }
     if area_id:
         meta["area_id"] = area_id
+    if assistant:
+        meta["exposed"] = _should_expose(hass, assistant, state.entity_id)
     return meta
 
 
@@ -132,13 +148,14 @@ def _match(
     area_name: str | None,
     floor_name: str | None,
     single_target: bool,
+    check_exposure: bool = True,
 ) -> intent.MatchTargetsResult:
     constraints = intent.MatchTargetsConstraints(
         name=name,
         area_name=area_name,
         floor_name=floor_name,
         domains=[MEDIA_PLAYER_DOMAIN],
-        assistant=llm_context.assistant,
+        assistant=llm_context.assistant if check_exposure else None,
         allow_duplicate_names=True,
         single_target=single_target,
     )
@@ -179,16 +196,80 @@ def _fail(
     text: str,
     hass: HomeAssistant,
     candidates: list[State] | None = None,
+    llm_context: llm.LLMContext | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"error": code, "error_text": text}
     if candidates is None:
         candidates, _ = _ma_players(hass)
     if candidates:
-        payload["candidates"] = [_player_meta(hass, s) for s in candidates]
+        assistant = llm_context.assistant if llm_context else None
+        payload["candidates"] = [
+            _player_meta(hass, s, assistant) for s in candidates
+        ]
         payload["hint"] = (
             "Target a Music Assistant media_player from 'candidates' by its exact "
-            "entity_id or name. Ask the user if ambiguous."
+            "entity_id or name. Entities with 'exposed': false are blocked from "
+            "voice control until the user exposes them to this assistant. "
+            "Ask the user if ambiguous."
         )
+    return payload
+
+
+def _exposed_fail(
+    hass: HomeAssistant,
+    llm_context: llm.LLMContext,
+    ma_states: list[State],
+    *,
+    name: str | None,
+    area_name: str | None,
+    floor_name: str | None,
+) -> dict[str, Any] | None:
+    """Fail with the names of matching-but-unexposed players, if any.
+
+    ``async_match_targets`` drops entities not exposed to the assistant as its
+    LAST step, so a correct name/area can still end in MatchFailedReason.
+    ASSISTANT. Re-run the same constraints without the assistant constraint to
+    find which entities were blocked; if none match, the failure was not about
+    exposure and we return None so the caller continues its normal fallbacks.
+    """
+    if not llm_context.assistant:
+        return None
+    result = _match(
+        hass,
+        ma_states,
+        llm_context,
+        name=name,
+        area_name=area_name,
+        floor_name=floor_name,
+        single_target=False,
+        check_exposure=False,
+    )
+    if not result.states:
+        return None
+    unexposed = [
+        s
+        for s in result.states
+        if not _should_expose(hass, llm_context.assistant, s.entity_id)
+    ]
+    payload = _fail(
+        _ERROR_NOT_EXPOSED,
+        "These Music Assistant players match but are not exposed to this "
+        "assistant, so they cannot be controlled by voice. Tell the user to "
+        "expose them: Settings → Voice assistants → Expose entities (or the "
+        "entity's settings → 'Expose to voice assistants').",
+        hass,
+        unexposed or list(result.states),
+        llm_context,
+    )
+    # Only surface alternative *exposed* candidates to retry with.
+    exposed = [
+        s
+        for s in ma_states
+        if _should_expose(hass, llm_context.assistant, s.entity_id)
+    ]
+    payload["exposed_candidates"] = [
+        _player_meta(hass, s, llm_context.assistant) for s in exposed
+    ]
     return payload
 
 
@@ -241,7 +322,19 @@ def resolve_player(
                 "Ask the user which one, or pass a more specific name/area.",
                 hass,
                 result.states,
+                llm_context,
             )
+        if result.no_match_reason == intent.MatchFailedReason.ASSISTANT:
+            # Entities matched but are not exposed to this assistant.
+            if fail := _exposed_fail(
+                hass,
+                llm_context,
+                ma_states,
+                name=name,
+                area_name=area_name,
+                floor_name=floor_name,
+            ):
+                return None, fail
         if result.no_match_reason in (
             intent.MatchFailedReason.INVALID_AREA,
             intent.MatchFailedReason.INVALID_FLOOR,
@@ -275,7 +368,18 @@ def resolve_player(
                 "Ask the user which one, or pass a more specific name/area.",
                 hass,
                 result.states,
+                llm_context,
             )
+        if result.no_match_reason == intent.MatchFailedReason.ASSISTANT:
+            if fail := _exposed_fail(
+                hass,
+                llm_context,
+                ma_states,
+                name=norm,
+                area_name=area_name,
+                floor_name=floor_name,
+            ):
+                return None, fail
 
     # 3. Area/floor-only match (name didn't resolve but a location did).
     if area_name or floor_name:
@@ -298,7 +402,18 @@ def resolve_player(
                 "Ask the user which one.",
                 hass,
                 result.states,
+                llm_context,
             )
+        if result.no_match_reason == intent.MatchFailedReason.ASSISTANT:
+            if fail := _exposed_fail(
+                hass,
+                llm_context,
+                ma_states,
+                name=None,
+                area_name=area_name,
+                floor_name=floor_name,
+            ):
+                return None, fail
 
     # 4. Distinguish 'not an MA player' from 'no such player at all'.
     if name and not (area_name or floor_name):
@@ -321,6 +436,7 @@ def resolve_player(
                 "a Music Assistant player from 'candidates'.",
                 hass,
                 ma_states,
+                llm_context,
             )
 
     # 5. Single available player -> use it when nothing was specified.
@@ -333,6 +449,7 @@ def resolve_player(
             "Ask the user which player to use.",
             hass,
             ma_states,
+            llm_context,
         )
 
     return None, _fail(
@@ -341,4 +458,5 @@ def resolve_player(
         f"(name {name!r}, area {area_name!r}, floor {floor_name!r}).",
         hass,
         ma_states,
+        llm_context,
     )
